@@ -114,11 +114,10 @@ curl -X POST http://localhost:8082/api/v1/orders \
 ```
 
 ## What's Not Here Yet (Roadmap)
-
 This is a phased learning project. Deliberately not yet implemented:
 - **Service discovery** (Eureka) — `order-service` currently reaches `user-service` via a configured base URL, not by service name
 - **API Gateway** (Spring Cloud Gateway) — clients call each service's port directly
-- **Circuit breakers / retries** (Resilience4j) — currently only basic timeouts
+- **Circuit breakers / retries** — currently only basic timeouts
 - **Async messaging** (Kafka) — order creation is a synchronous, blocking call
 - **Docker Compose** — services and databases are currently started individually
 - **Auth / JWT**
@@ -138,4 +137,51 @@ logistics-platform/
         ├── controller/   service/   repository/
         ├── model/        dto/       mapper/
         ├── client/       config/    exception/
+Let's do both — update the README first, then commit everything together.
+
+Step 1: Update the README
+
+Open your README.md and make two changes:
+
+A. Remove this line from the "What's Not Here Yet" list:
+
+- **Docker Compose** — services and databases are currently started individually
+
+B. Add a new section — I'd put this right after "Running Locally", as an alternative/preferred way to run everything:
+
+markdown
+## Running with Docker Compose (recommended)
+
+Instead of starting each database and service individually, the entire platform can be started with one command:
+
+```bash
+docker-compose up --build
 ```
+
+This builds and starts all 4 containers — `user-db`, `order-db`, `user-service`, `order-service` — networked together. Inside this network, services reach each other by container name rather than `localhost` (e.g. `order-service` calls `user-service` at `http://user-service:8081`, configured via the `USER_SERVICE_URL` environment variable in `docker-compose.yml`).
+
+To stop everything:
+```bash
+docker-compose down
+```
+
+To also wipe the database volumes (fresh start):
+```bash
+docker-compose down -v
+```
+
+Save the file.
+
+Step 2: Check what's new/changed for Git
+powershell
+cd D:\workplace\logistics-platform
+git status
+
+You should see something like:
+
+modified:   README.md
+modified:   order-service/src/main/resources/application.yml
+modified:   user-service/src/main/resources/application.yml
+untracked:  docker-compose.yml
+untracked:  order-service/Dockerfile
+untracked:  user-service/Dockerfile

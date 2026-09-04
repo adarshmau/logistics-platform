@@ -30,6 +30,7 @@ public class OrderServiceImpl implements OrderService{
     public OrderResponse createOrder(CreateOrderRequest request) {
 
        UserResponse user= userClient.getUserById(request.getUserId());
+
        log.info("Creating order for verified user:{} ({})" ,user.getName(),user.getEmail());
 
        Order order = orderMapper.toEntity(request);
