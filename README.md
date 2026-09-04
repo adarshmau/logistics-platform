@@ -1,0 +1,141 @@
+# Logistics & Shipment Scheduling Platform
+
+A microservices-based logistics and shipment scheduling system, built from scratch as a learning project to explore real-world distributed systems concerns — service-to-service communication, per-service data ownership, and graceful degradation under partial system failure.
+
+## Overview
+
+This project is intentionally built incrementally, in phases, to deeply understand microservices concepts rather than just assembling a tutorial. **Phase 1** (current) implements two independently deployable services that communicate synchronously over REST.
+
+```
+┌─────────────────┐         HTTP (REST)         ┌──────────────────┐
+│                  │ ─────────────────────────> │                  │
+│  order-service   │   GET /api/v1/users/{id}    │   user-service   │
+│   (port 8082)    │ <───────────────────────── │   (port 8081)    │
+│                  │                              │                  │
+└────────┬─────────┘                              └────────┬─────────┘
+         │                                                  │
+         ▼                                                  ▼
+   ┌───────────┐                                      ┌───────────┐
+   │ order_db  │                                      │  user_db  │
+   │ (Postgres)│                                      │ (Postgres)│
+   └───────────┘                                      └───────────┘
+```
+
+Each service owns its own database exclusively — there are no shared tables, no cross-service joins, and no shared Java classes between services. When `order-service` needs to know about a user, it asks `user-service` directly over HTTP, live, rather than duplicating or joining data.
+
+## Tech Stack
+
+- **Java 21**, **Spring Boot 4.1**
+- **Spring Data JPA** + **Hibernate** (PostgreSQL)
+- **Spring Web** (REST APIs)
+- **Spring Boot Validation** (Bean Validation / Jakarta Validation)
+- **RestTemplate** (`spring-boot-starter-restclient`) for inter-service HTTP calls
+- **Lombok**
+- **Docker** (PostgreSQL containers per service)
+- **Maven**
+
+## Services
+
+### `user-service` (port 8081)
+Manages users (customers, drivers, admins). Full CRUD REST API backed by its own `user_db` PostgreSQL database.
+
+### `order-service` (port 8082)
+Manages shipment orders. Backed by its own `order_db` PostgreSQL database. When creating an order, it validates the referenced `userId` by calling `user-service` over HTTP — this is the core inter-service interaction in this project.
+
+## Architecture & Design Decisions
+
+**No cross-service data joins.** `Order` stores only a plain `userId` (a `Long`), never a full `User` object or JPA relationship — since `order_db` and `user_db` are physically separate databases, a real foreign-key relationship isn't possible, and duplicating user data into `order-service` would risk going stale. Fresh user data is fetched over HTTP only when actually needed.
+
+**Layered architecture per service:** `Controller → Service (interface + impl) → Mapper → Repository → Entity`, with DTOs (`*Request` / `*Response`) fully separating the public API contract from internal persistence models.
+
+**Resilience on inter-service calls.** `order-service`'s `UserClient` uses configured connection/read timeouts (via `RestTemplateBuilder`) and translates low-level HTTP/network exceptions into domain-specific ones:
+- `HttpClientErrorException.NotFound` → `UserNotFoundException` → HTTP `400`
+- `ResourceAccessException` (timeout / connection refused) → `ServiceUnavailableException` → HTTP `503`
+
+This means if `user-service` goes down, `order-service` degrades gracefully with a clean `503` response instead of hanging indefinitely or throwing a raw `500`.
+
+**Centralized exception handling.** Each service has a `@RestControllerAdvice` `GlobalExceptionHandler` that converts exceptions into consistent, structured JSON error responses (`timestamp`, `status`, `message`/`errors`).
+
+## Prerequisites
+
+- JDK 17+ (developed with JDK 21/22)
+- Maven
+- Docker Desktop
+- An IDE (IntelliJ IDEA recommended)
+
+## Running Locally
+
+**1. Start the databases (Docker):**
+```bash
+docker run -d --name user-db -e POSTGRES_DB=user_db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres:16-alpine
+
+docker run -d --name order-db -e POSTGRES_DB=order_db -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -p 5433:5432 postgres:16-alpine
+```
+
+**2. Run each service** (from IntelliJ, or via Maven):
+```bash
+cd user-service
+./mvnw spring-boot:run
+```
+```bash
+cd order-service
+./mvnw spring-boot:run
+```
+
+`user-service` starts on `:8081`, `order-service` on `:8082`. Hibernate auto-creates the schema on first run (`ddl-auto: update`).
+
+## API Reference
+
+### `user-service` — `/api/v1/users`
+| Method | Path | Description |
+|---|---|---|
+| POST | `/` | Create a user |
+| GET | `/{id}` | Get a user by id |
+| GET | `/` | List all users |
+| PUT | `/{id}` | Update a user |
+| DELETE | `/{id}` | Delete a user |
+
+### `order-service` — `/api/v1/orders`
+| Method | Path | Description |
+|---|---|---|
+| POST | `/` | Create an order (validates `userId` against `user-service`) |
+| GET | `/{id}` | Get an order by id |
+| GET | `/` | List all orders |
+| GET | `/user/{userId}` | List orders for a given user |
+| GET | `/status/{status}` | List orders by status |
+| PATCH | `/{id}/status?status=X` | Update an order's status |
+| DELETE | `/{id}` | Cancel an order (soft — sets status to `CANCELLED`) |
+
+**Example — create an order:**
+```bash
+curl -X POST http://localhost:8082/api/v1/orders \
+  -H "Content-Type: application/json" \
+  -d '{"userId":1,"pickupAddress":"Koramangala","deliveryAddress":"Whitefield","weightKg":5.5}'
+```
+
+## What's Not Here Yet (Roadmap)
+
+This is a phased learning project. Deliberately not yet implemented:
+- **Service discovery** (Eureka) — `order-service` currently reaches `user-service` via a configured base URL, not by service name
+- **API Gateway** (Spring Cloud Gateway) — clients call each service's port directly
+- **Circuit breakers / retries** (Resilience4j) — currently only basic timeouts
+- **Async messaging** (Kafka) — order creation is a synchronous, blocking call
+- **Docker Compose** — services and databases are currently started individually
+- **Auth / JWT**
+- **CI/CD** (GitHub Actions)
+
+## Project Structure
+
+```
+logistics-platform/
+├── user-service/
+│   └── src/main/java/com/logistics/user/
+│       ├── controller/   service/   repository/
+│       ├── model/        dto/       mapper/
+│       └── exception/
+└── order-service/
+    └── src/main/java/com/logistics/order/
+        ├── controller/   service/   repository/
+        ├── model/        dto/       mapper/
+        ├── client/       config/    exception/
+```
