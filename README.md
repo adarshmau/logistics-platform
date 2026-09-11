@@ -185,3 +185,67 @@ modified:   user-service/src/main/resources/application.yml
 untracked:  docker-compose.yml
 untracked:  order-service/Dockerfile
 untracked:  user-service/Dockerfile
+
+Let's update the README to reflect the new architecture, then push.
+
+Step 1: Update the architecture diagram
+
+Find the ASCII diagram near the top and replace it with this updated version showing all three services:
+
+┌──────────────┐        registers         ┌──────────────────┐
+│ user-service │ ────────────────────────▶│                   │
+│  (port 8081) │                           │  eureka-server    │
+└──────┬───────┘        registers         │   (port 8761)     │
+│           ┌──────────────────────│                   │
+│           │                      └───────────────────┘
+│           ▼
+┌──────┴───────┐  discovers user-service    
+│ order-service│  by name via Eureka +
+│  (port 8082) │  @LoadBalanced RestTemplate
+└──────┬───────┘
+│  HTTP call to whatever address
+▼  Eureka resolves right now
+┌──────────────┐
+│ user-service │
+└──────────────┘
+
+        ▼                    ▼
+┌───────────┐       ┌───────────┐
+│ order_db  │       │  user_db  │
+│ (Postgres)│       │ (Postgres)│
+└───────────┘       └───────────┘
+Step 2: Add a new section explaining service discovery
+
+Insert this right after the "Architecture & Design Decisions" section:
+
+markdown
+## Service Discovery (Eureka)
+
+Rather than `order-service` hardcoding `user-service`'s address, both services register themselves with a Eureka Server (`eureka-server`, port 8761) on startup. `order-service`'s `RestTemplate` is annotated `@LoadBalanced`, which lets it call `http://USER-SERVICE/...` — a **logical service name**, not a real host — and have the actual current address resolved dynamically through Eureka at request time.
+
+This means `order-service` never needs to know or configure `user-service`'s real address, port, or host — even if it moves, restarts on a different port, or runs as multiple scaled instances.
+
+Eureka dashboard: `http://localhost:8761`
+Step 3: Update the Tech Stack list
+
+Add this line:
+
+markdown
+- **Spring Cloud Netflix Eureka** (service registry + client-side discovery)
+  Step 4: Update "What's Not Here Yet"
+
+Remove:
+
+- **Service discovery** (Eureka) — `order-service` currently reaches `user-service` via a configured base URL, not by service name
+  Step 5: Update the "Running Locally" / Docker Compose sections
+
+Mention the new port:
+
+markdown
+Eureka Server starts on `:8761` — dashboard viewable in a browser once running.
+
+And update the Docker Compose command note to mention it now starts 5 containers instead of 4.
+
+Step 6: Update Project Structure
+
+Add eureka-server/ as a third top-level folder in that tree, noting it has no controller/service/repository layers — just the main application class and application.yml.

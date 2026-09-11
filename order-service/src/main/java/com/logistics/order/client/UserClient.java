@@ -18,12 +18,15 @@ public class UserClient {
 
     private final RestTemplate restTemplate;
 
-    @Value("${user-service.base-url}")
-    private String userServiceBaseUrl;
+//    @Value("${user-service.base-url}")
+//    private String userServiceBaseUrl;
 
+
+    private static final String USER_SERVICE_URL = "http://USER-SERVICE/api/v1/users/";
     public UserResponse getUserById(Long userId) {
 
-        String url = userServiceBaseUrl + "/api/v1/users/" + userId;
+       String url = USER_SERVICE_URL+userId;
+
         try {
             log.info("Calling user-service: GET {}", url);
             return restTemplate.getForObject(url, UserResponse.class);//Send GET request to this URL and convert the response into UserResponse
