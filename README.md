@@ -249,3 +249,69 @@ And update the Docker Compose command note to mention it now starts 5 containers
 Step 6: Update Project Structure
 
 Add eureka-server/ as a third top-level folder in that tree, noting it has no controller/service/repository layers — just the main application class and application.yml.
+Client → API Gateway (8080) → routes via Eureka → user-service (8081) / order-service (8082)
+↑ ↑
+└──────────── registers/discovers ───────────┴──── Eureka Server (8761)
+
+
+- **api-gateway** — single entry point for all clients. Routes requests based on path prefix (`/user-service/**`, `/order-service/**`), resolving the real address of each service dynamically through Eureka.
+- **eureka-server** — service registry. Every service checks in on startup; the gateway and `order-service` both query it to find other services.
+- **user-service / order-service** — as before, each owns its own database, communicate over REST.
+
+## 2. Add a new "API Gateway" section
+
+Insert this after the "Service Discovery (Eureka)" section:
+
+````markdown
+## API Gateway
+
+`api-gateway` (port 8080) is the single entry point for all client traffic — clients never call `user-service` or `order-service` directly. Routes are generated **dynamically**: at startup, the gateway asks Eureka for every currently registered service and builds a route for each one automatically (`GatewayConfig.java`), rather than hardcoding a route per service.
+
+Built on **Spring Cloud Gateway Server MVC** — the newer, non-reactive variant that matches the rest of this project's Spring MVC style, rather than the classic reactive (WebFlux-based) Gateway.
+
+**Example usage:**
+```bash
+# Instead of calling user-service directly on :8081
+curl http://localhost:8080/user-service/api/v1/users
+
+# Instead of calling order-service directly on :8082
+curl http://localhost:8080/order-service/api/v1/orders
+```
+
+**Known limitation:** routes are built once at gateway startup. A service that registers with Eureka *after* the gateway has already started won't get a route until the gateway restarts. Acceptable for this project's scale given the startup order enforced in `docker-compose.yml`; a production system would add periodic or event-driven route refresh.
+````
+
+## 3. Update the Tech Stack list
+
+Add:
+````markdown
+- **Spring Cloud Gateway** (Server MVC variant) — single entry point, dynamic routing via Eureka
+````
+
+## 4. Update "What's Not Here Yet"
+
+Remove:
+API Gateway (Spring Cloud Gateway) — clients call each service's port directly
+
+## 5. Update "Running with Docker Compose"
+
+Update the container count mention:
+````markdown
+This builds and starts all 6 containers — `user-db`, `order-db`, `eureka-server`, `user-service`, `order-service`, `api-gateway` — networked together.
+````
+
+## 6. Update Project Structure
+
+Add `api-gateway/` as a fourth top-level module in the tree, noting it has a `config/` package (for `GatewayConfig.java`) instead of the usual controller/service/repository layers.
+
+---
+
+Make these six edits, then:
+````powershell
+cd D:\workplace\logistics-platform
+git add README.md
+git commit -m "Update README for Phase 3: API Gateway and dynamic routing"
+git push
+````
+
+Paste the `git status` or push output once done.
