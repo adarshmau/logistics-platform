@@ -38,6 +38,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserResponse getUserById(Long id) {
+
         return userMapper.toResponse(findUserOrThrow(id));
     }
 

@@ -5,7 +5,6 @@ import com.logistics.order.exception.ServiceUnavailableException;
 import com.logistics.order.exception.UserNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.ResourceAccessException;
@@ -23,6 +22,7 @@ public class UserClient {
 
 
     private static final String USER_SERVICE_URL = "http://USER-SERVICE/api/v1/users/";
+
     public UserResponse getUserById(Long userId) {
 
        String url = USER_SERVICE_URL+userId;
