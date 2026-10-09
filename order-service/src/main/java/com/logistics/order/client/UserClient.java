@@ -3,6 +3,7 @@ package com.logistics.order.client;
 import com.logistics.order.dto.UserResponse;
 import com.logistics.order.exception.ServiceUnavailableException;
 import com.logistics.order.exception.UserNotFoundException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -17,19 +18,16 @@ public class UserClient {
 
     private final RestTemplate restTemplate;
 
-//    @Value("${user-service.base-url}")
-//    private String userServiceBaseUrl;
-
-
     private static final String USER_SERVICE_URL = "http://USER-SERVICE/api/v1/users/";
 
+    // Method 1: the REAL call. This is what runs normally when the circuit is CLOSED.
+    @CircuitBreaker(name = "userService", fallbackMethod = "getUserByIdFallback")
     public UserResponse getUserById(Long userId) {
-
-       String url = USER_SERVICE_URL+userId;
+        String url = USER_SERVICE_URL + userId;
 
         try {
             log.info("Calling user-service: GET {}", url);
-            return restTemplate.getForObject(url, UserResponse.class);//Send GET request to this URL and convert the response into UserResponse
+            return restTemplate.getForObject(url, UserResponse.class);
 
         } catch (HttpClientErrorException.NotFound ex) {
             log.warn("user-service reported no user with id: {}", userId);
@@ -37,8 +35,20 @@ public class UserClient {
 
         } catch (ResourceAccessException ex) {
             log.error("user-service is unreachable: {}", ex.getMessage());
-            throw new ServiceUnavailableException("user-service is currently unavailable. " +
-                    "Please try again later.");
+            throw new ServiceUnavailableException("user-service is currently unavailable. Please try again later.");
         }
+    }
+
+    // Method 2: the FALLBACK. No @CircuitBreaker annotation here.
+    // No network call here. This only runs when the circuit is OPEN,
+    // or when getUserById throws something the circuit breaker treats as a failure.
+    private UserResponse getUserByIdFallback(Long userId, Throwable throwable) {
+        log.error(
+                "Fallback triggered | userId={} | exceptionType={} | message={}",
+                userId,
+                throwable.getClass().getSimpleName(),
+                throwable.getMessage()
+        );
+        throw new ServiceUnavailableException("user-service is currently unavailable. Please try again later.");
     }
 }

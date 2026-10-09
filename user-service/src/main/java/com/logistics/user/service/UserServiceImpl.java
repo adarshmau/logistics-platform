@@ -70,7 +70,8 @@ public class UserServiceImpl implements UserService {
     public void deleteUser(Long id) {
         User existing = findUserOrThrow(id);
         userRepository.delete(existing);
-        log.info("Deleted user with id: {}", id);
+        log.info("Deleted" +
+                "d user with id: {}", id);
     }
 
 

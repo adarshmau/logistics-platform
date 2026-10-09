@@ -314,4 +314,15 @@ git commit -m "Update README for Phase 3: API Gateway and dynamic routing"
 git push
 ````
 
-Paste the `git status` or push output once done.
+phase 4:
+## Resilience (Resilience4j)
+
+`order-service`'s call to `user-service` is wrapped in a Resilience4j circuit breaker, on top of the existing connect/read timeouts.
+
+- **CLOSED**: normal operation, failures are counted over a sliding window of 10 calls.
+- **OPEN**: once 50% or more of those calls fail, the circuit trips. Further calls skip the network and go straight to a fallback, which returns 503.
+- **HALF_OPEN**: after 10 seconds, 3 test calls are allowed through. If they succeed, the circuit closes. If not, it opens again.
+
+A "user not found" response (404 from `user-service`) is **not** counted as a failure. The service answered correctly, so only real connectivity problems trip the circuit.
+
+Tested live: stopped `user-service`, sent repeated order requests, and confirmed the circuit opened and requests were rejected without calling `user-service`.
